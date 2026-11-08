@@ -76,7 +76,7 @@ document.addEventListener('visibilitychange',function(){if(!document.hidden){if(
 /* 535-537 : messages de Jarvis (interphone, rappels qui sonnent ici) et garde des animaux */
 var VU_A=0,FILE_ANN=[],GARDE=null;
 function carillon(n){[660,880,1100].slice(0,n||2).forEach(function(f,k){setTimeout(function(){bip(f);},k*230);});}
-function annonces(l){(l||[]).forEach(function(a){if(a.at>VU_A)VU_A=a.at;if(a.type==='garde'){if(a.opts&&a.opts.actif===false)gardeArreter();else gardeDemarrer(a.opts||{});return;}FILE_ANN.push(a);});jouerAnnonce();}
+function annonces(l){(l||[]).forEach(function(a){if(a.at>VU_A)VU_A=a.at;if(a.type==='garde'){if(a.opts&&a.opts.actif===false)gardeArreter();else gardeDemarrer(a.opts||{});return;}if(T72[a.type]){T72[a.type](a);return;}FILE_ANN.push(a);});jouerAnnonce();}
 function jouerAnnonce(){if(!FILE_ANN.length)return;if(parle){setTimeout(jouerAnnonce,1200);return;}var a=FILE_ANN.shift(),son=a.type==='sonnerie';
   $('ent').textContent=son?'⏰ '+a.texte:'📨 Message'+(a.de?' de '+a.de:'')+' : '+a.texte;carillon(son?3:2);
   setTimeout(function(){dire((!son&&a.de?'Message de '+a.de+' : ':'')+a.texte,function(){if(!son&&!POCHE&&!GARDE){attendCmd=Date.now();etat('Tu peux répondre…','ecoute');ecouter();}else if(!POCHE&&!GARDE){ecouter();}if(FILE_ANN.length)setTimeout(jouerAnnonce,700);});},750);}
@@ -94,6 +94,30 @@ function gardeMesure(){var G=GARDE;if(!G||!G.an||parle)return;G.an.getFloatTimeD
   var sec=G.fort.length*0.25,n=$('gardeNiv');if(n){n.style.width=Math.max(0,Math.min(100,(db-base)/(G.seuil*2)*100))+'%';n.style.background=fort?'#f97316':'#22c55e';}
   if(sec>=8&&now-G.derniere>600000){G.derniere=now;run('pieceAlerte',[PIECE,'bruit',{secondes:Math.round(sec),niveau:Math.round(db-base)}],function(){},function(){});var d=new Date(),t=$('gardeTxt');if(t)t.textContent='Alerte envoyée à '+d.getHours()+' h '+('0'+d.getMinutes()).slice(-2)+'. Je continue d’écouter.';}}
 function gardeArreter(){var G=GARDE;GARDE=null;gardeUI(false);if(G){clearInterval(G.iv);try{G.st.getTracks().forEach(function(t){t.stop();});}catch(e){}try{G.ac.close();}catch(e){}run('pieceAlerte',[PIECE,'garde_off',{}],function(){},function(){});}if(!POCHE)setTimeout(function(){ecouter();},400);}
+/* 555 : le mot sur la tablette (reste affiché jusqu’à ce qu’on le lise) · 556 : la maison qui fait semblant · 557 : le mode nuit des tablettes */
+var MOTS={},PRES=null,NUIT72=null;
+try{MOTS=JSON.parse(localStorage.getItem('jarvis-mots')||'{}')||{};}catch(e){MOTS={};}
+function motsSauver(){try{localStorage.setItem('jarvis-mots',JSON.stringify(MOTS));}catch(e){}}
+function motsAfficher(){var b=$('mots72');var l=Object.keys(MOTS).map(function(k){return MOTS[k];}).filter(function(m){return !m.lu;});
+  if(!l.length){if(b)b.parentNode.removeChild(b);return;}
+  if(!b){b=document.createElement('div');b.id='mots72';b.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:55;display:flex;flex-direction:column;gap:10px;width:min(560px,92vw)';document.body.appendChild(b);}
+  b.innerHTML='';l.forEach(function(m){var c=document.createElement('div');c.style.cssText='background:#fef3c7;color:#422006;border-radius:14px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.45);font:18px system-ui,sans-serif;transform:rotate(-1deg)';
+    var t=document.createElement('div');t.style.cssText='font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75;margin-bottom:6px';t.textContent='📝 Mot de '+(m.de||'Jarvis')+(m.pour&&m.pour!=='nous deux'?' pour '+m.pour:'');
+    var x=document.createElement('div');x.textContent=m.texte;var o=document.createElement('button');o.type='button';o.textContent='✓ Lu';o.style.cssText='margin-top:12px;font:600 16px system-ui,sans-serif;padding:10px 20px;border-radius:22px;border:0;background:#422006;color:#fef3c7';
+    o.onclick=function(){m.lu=Date.now();motsSauver();motsAfficher();run('pieceAlerte',[PIECE,'mot_lu',{id:m.id,qui:qui||m.pour||''}],function(){},function(){});};c.appendChild(t);c.appendChild(x);c.appendChild(o);b.appendChild(c);});}
+function motRecu(a){var id=(a.opts&&a.opts.id)||a.id;if(!id)return;if(MOTS[id]){if(!MOTS[id].lu)motsAfficher();return;}MOTS[id]={id:id,texte:a.texte,de:a.de,pour:(a.opts&&a.opts.pour)||'',at:a.at};motsSauver();motsAfficher();
+  var k=Object.keys(MOTS);if(k.length>30){k.sort(function(x,y){return MOTS[x].at-MOTS[y].at;}).slice(0,k.length-30).forEach(function(z){delete MOTS[z];});motsSauver();}
+  if(!GARDE&&!NUIT72){carillon(2);setTimeout(function(){dire('Un mot de '+(a.de||'Jarvis')+(MOTS[id].pour&&MOTS[id].pour!=='nous deux'?' pour '+MOTS[id].pour:'')+' : '+a.texte);},700);}}
+var PHRASES72=['Tu veux un thé ?','Le repas est bientôt prêt !','Tu as vu l’heure ?','Je vais chercher quelque chose à la cave.','On regarde un film ce soir ?','Tu as nourri le chien ?','Il fait frais ce soir.','Je ferme les volets.'];
+function presence(o){if(o&&o.actif===false){if(PRES){clearInterval(PRES.iv);PRES=null;lampe(false);}return;}if(PRES)return;PRES={prochain:Date.now()+60000,lampe:false};PRES.iv=setInterval(presenceTick,60000);}
+function lampe(on){var v=$('lampe72');if(!on){if(v)v.parentNode.removeChild(v);if(PRES)PRES.lampe=false;return;}if(!v){v=document.createElement('div');v.id='lampe72';v.style.cssText='position:fixed;inset:0;z-index:58;background:#fff8e7';document.body.appendChild(v);}if(PRES)PRES.lampe=true;}
+function presenceTick(){if(!PRES)return;var d=new Date(),h=d.getHours()+d.getMinutes()/60,soir=h>=17.5&&h<23.25;if(!soir){if(PRES.lampe)lampe(false);return;}if(Date.now()<PRES.prochain)return;
+  if(Math.random()<0.55){lampe(!PRES.lampe);}else{dire(PHRASES72[Math.floor(Math.random()*PHRASES72.length)]);}PRES.prochain=Date.now()+(12+Math.random()*35)*60000;}
+function nuit72(o){if(o&&o.actif===false){var v=$('nuit72');if(v)v.parentNode.removeChild(v);NUIT72=null;return;}NUIT72={jusqua:(o&&o.jusqua)||0};var n=$('nuit72');if(!n){n=document.createElement('div');n.id='nuit72';
+  n.style.cssText='position:fixed;inset:0;z-index:57;background:#000;color:#3f3f46;display:flex;align-items:center;justify-content:center;font:200 18vmin system-ui,sans-serif;cursor:pointer';n.onclick=function(){nuit72({actif:false});};document.body.appendChild(n);}
+  var maj=function(){if(!NUIT72){return;}var d=new Date();n.textContent=d.getHours()+':'+('0'+d.getMinutes()).slice(-2);if(NUIT72.jusqua&&Date.now()>NUIT72.jusqua)nuit72({actif:false});else setTimeout(maj,30000);};maj();}
+var T72={mot:motRecu,presence:function(a){presence(a.opts||{});},nuit:function(a){nuit72(a.opts||{});}};
+setTimeout(motsAfficher,1500);
 function ping(){run('piecePing',[PIECE,VU_A],function(r){if(r){if(VU_A<=0)VU_A=r.maintenant;else if(r.ann&&r.ann.length)annonces(r.ann);}var ok=r&&r.pc&&r.maintenant-r.pc<45000;$('pc').textContent=ok?'● Jarvis connecté':'● PC de Jarvis injoignable';$('pc').className='pc '+(ok?'ok':'ko');},function(){$('pc').textContent='● pas de connexion';$('pc').className='pc ko';});}
 $('f').onsubmit=function(e){e.preventDefault();var t=$('txt').value;$('txt').value='';envoyer(t);};
 $('parler').onclick=function(){if(parle){try{speechSynthesis.cancel();}catch(e){}parle=false;}bip(660);ecouter(true);};
