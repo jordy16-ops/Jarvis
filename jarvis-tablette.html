@@ -116,7 +116,7 @@ function presenceTick(){if(!PRES)return;var d=new Date(),h=d.getHours()+d.getMin
 function nuit72(o){if(o&&o.actif===false){var v=$('nuit72');if(v)v.parentNode.removeChild(v);NUIT72=null;return;}NUIT72={jusqua:(o&&o.jusqua)||0};var n=$('nuit72');if(!n){n=document.createElement('div');n.id='nuit72';
   n.style.cssText='position:fixed;inset:0;z-index:57;background:#000;color:#3f3f46;display:flex;align-items:center;justify-content:center;font:200 18vmin system-ui,sans-serif;cursor:pointer';n.onclick=function(){nuit72({actif:false});};document.body.appendChild(n);}
   var maj=function(){if(!NUIT72){return;}var d=new Date();n.textContent=d.getHours()+':'+('0'+d.getMinutes()).slice(-2);if(NUIT72.jusqua&&Date.now()>NUIT72.jusqua)nuit72({actif:false});else setTimeout(maj,30000);};maj();}
-var T72={mot:motRecu,presence:function(a){presence(a.opts||{});},nuit:function(a){nuit72(a.opts||{});}};
+var T72={mot:motRecu,presence:function(a){presence(a.opts||{});},nuit:function(a){nuit72(a.opts||{});}};T72.recharger=function(){setTimeout(function(){location.reload();},90000);};
 setTimeout(motsAfficher,1500);
 function ping(){run('piecePing',[PIECE,VU_A],function(r){if(r){if(VU_A<=0)VU_A=r.maintenant;else if(r.ann&&r.ann.length)annonces(r.ann);}var ok=r&&r.pc&&r.maintenant-r.pc<45000;$('pc').textContent=ok?'● Jarvis connecté':'● PC de Jarvis injoignable';$('pc').className='pc '+(ok?'ok':'ko');},function(){$('pc').textContent='● pas de connexion';$('pc').className='pc ko';});}
 $('f').onsubmit=function(e){e.preventDefault();var t=$('txt').value;$('txt').value='';envoyer(t);};
