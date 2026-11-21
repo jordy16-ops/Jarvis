@@ -118,6 +118,33 @@ function nuit72(o){if(o&&o.actif===false){var v=$('nuit72');if(v)v.parentNode.re
   var maj=function(){if(!NUIT72){return;}var d=new Date();n.textContent=d.getHours()+':'+('0'+d.getMinutes()).slice(-2);if(NUIT72.jusqua&&Date.now()>NUIT72.jusqua)nuit72({actif:false});else setTimeout(maj,30000);};maj();}
 var T72={mot:motRecu,presence:function(a){presence(a.opts||{});},nuit:function(a){nuit72(a.opts||{});}};T72.recharger=function(){setTimeout(function(){location.reload();},90000);};
 setTimeout(motsAfficher,1500);
+/* 899 : l’écran de l’entrée. La caméra (seulement si on l’a choisie) sert à rallumer l’écran quand quelqu’un passe : aucune image n’est gardée ni envoyée. */
+var ENT=null,ENT_CAM=null,ENT_VU=Date.now(),ENT_PAUSE=0;
+try{ENT=JSON.parse(localStorage.getItem('jarvis-entree')||'null');}catch(e){ENT=null;}
+function entEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function entLire(t){var d={meteo:null,blocs:[],camera:false};String(t||'').split('§').forEach(function(b){var p=b.split('¦');if(p[0]==='M')d.meteo={temp:p[1],ressenti:p[2],pluie:p[3]};else if(p[0]==='C')d.camera=p[1]==='1';else if(p[0]==='B'&&p.length>3)d.blocs.push({ic:p[1],titre:p[2],lignes:p.slice(3)});});return d;}
+function entRecu(a){if(a.opts&&a.opts.actif===false){ENT=null;try{localStorage.removeItem('jarvis-entree');}catch(e){}entAfficher();entCamera(false);return;}
+  var d=entLire(a.texte);d.at=Date.now();ENT=d;try{localStorage.setItem('jarvis-entree',JSON.stringify(d));}catch(e){}ENT_VU=Date.now();entAfficher();entCamera(d.camera);}
+function entAfficher(){var v=$('entree99');if(!ENT||Date.now()-ENT.at>3*3600000||Date.now()<ENT_PAUSE){if(v)v.parentNode.removeChild(v);return;}
+  if(!v){v=document.createElement('div');v.id='entree99';v.style.cssText='position:fixed;inset:0;z-index:50;background:radial-gradient(1200px 800px at 50% 20%,#121a33,#070b14);color:#eaf0ff;padding:20px 18px 90px;overflow:auto;font-family:Figtree,system-ui,sans-serif;transition:opacity .8s';document.body.appendChild(v);
+    v.addEventListener('click',function(){ENT_VU=Date.now();v.style.opacity='1';});}
+  var d=new Date(),M=ENT.meteo,h='<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px"><div><div style="font:700 clamp(3.2rem,13vw,6.5rem)/1 Figtree,sans-serif;letter-spacing:-.02em">'+d.getHours()+':'+('0'+d.getMinutes()).slice(-2)+'</div><div style="color:#8d9bb8;text-transform:capitalize">'+entEsc(d.toLocaleDateString('fr-BE',{weekday:'long',day:'numeric',month:'long'}))+'</div></div>';
+  if(M)h+='<div style="text-align:right"><div style="font:700 2.4rem/1 Figtree,sans-serif">'+entEsc(M.temp)+' °C</div><div style="color:#8d9bb8">ressenti '+entEsc(M.ressenti)+' °C</div><div style="margin-top:4px;font-weight:600">'+entEsc(M.pluie)+'</div></div>';
+  h+='</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">';
+  ENT.blocs.forEach(function(b){h+='<div style="background:#ffffff0f;border:1px solid #ffffff1a;border-radius:18px;padding:14px 16px"><div style="font-weight:700;font-size:1.05rem;margin-bottom:6px">'+entEsc(b.ic)+' '+entEsc(b.titre)+'</div>'+b.lignes.map(function(l){return '<div style="font-size:1.12rem;line-height:1.45">'+entEsc(l)+'</div>';}).join('')+'</div>';});
+  if(!ENT.blocs.length)h+='<div style="color:#8d9bb8;font-size:1.2rem">Rien de spécial aujourd’hui. Bonne journée !</div>';
+  h+='</div><button type="button" id="entParler" style="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);font:700 1.1rem Figtree,sans-serif;padding:16px 28px;border-radius:999px;border:0;background:linear-gradient(135deg,#7c5cff,#22d3ee);color:#fff">🎙 Parler à Jarvis</button>';
+  v.innerHTML=h;$('entParler').onclick=function(e){e.stopPropagation();ENT_PAUSE=Date.now()+180000;entAfficher();if(typeof ecouter==='function'&&!POCHE){bip(660);ecouter(true);}};}
+/* l’écran s’assombrit après 2 minutes sans mouvement, et se rallume quand quelqu’un passe (ou touche l’écran) */
+setInterval(function(){var v=$('entree99');if(!v){if(ENT&&Date.now()>=ENT_PAUSE&&ENT_PAUSE)entAfficher();return;}v.style.opacity=Date.now()-ENT_VU>120000?'0.15':'1';},4000);
+setInterval(function(){if($('entree99'))entAfficher();},30000);
+function entCamera(on){if(!on||GARDE||NUIT72){if(ENT_CAM){clearInterval(ENT_CAM.iv);try{ENT_CAM.st.getTracks().forEach(function(t){t.stop();});}catch(e){}ENT_CAM=null;}return;}if(ENT_CAM||!navigator.mediaDevices)return;
+  navigator.mediaDevices.getUserMedia({video:{width:160,height:120,facingMode:'user'},audio:false}).then(function(st){var vi=document.createElement('video');vi.muted=true;vi.setAttribute('playsinline','');vi.srcObject=st;vi.play();
+    var c=document.createElement('canvas');c.width=32;c.height=24;var x=c.getContext('2d'),avant=null;
+    ENT_CAM={st:st,iv:setInterval(function(){if(NUIT72||GARDE){entCamera(false);return;}try{x.drawImage(vi,0,0,32,24);var p=x.getImageData(0,0,32,24).data,g=new Uint8Array(768),s=0,i;for(i=0;i<768;i++){g[i]=(p[i*4]+p[i*4+1]+p[i*4+2])/3;if(avant)s+=Math.abs(g[i]-avant[i]);}
+      if(avant&&s/768>9){ENT_VU=Date.now();var v=$('entree99');if(v)v.style.opacity='1';}avant=g;}catch(e){}},700)};}).catch(function(){});}
+T72.entree=entRecu;
+setTimeout(function(){if(ENT){entAfficher();entCamera(ENT.camera);}},2000);
 function ping(){run('piecePing',[PIECE,VU_A],function(r){if(r){if(VU_A<=0)VU_A=r.maintenant;else if(r.ann&&r.ann.length)annonces(r.ann);}var ok=r&&r.pc&&r.maintenant-r.pc<45000;$('pc').textContent=ok?'● Jarvis connecté':'● PC de Jarvis injoignable';$('pc').className='pc '+(ok?'ok':'ko');},function(){$('pc').textContent='● pas de connexion';$('pc').className='pc ko';});}
 $('f').onsubmit=function(e){e.preventDefault();var t=$('txt').value;$('txt').value='';envoyer(t);};
 $('parler').onclick=function(){if(parle){try{speechSynthesis.cancel();}catch(e){}parle=false;}bip(660);ecouter(true);};
