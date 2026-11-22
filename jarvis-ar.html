@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Jarvis · réalité augmentée</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;color:#ece8f5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+  #v{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
+  #calque{position:fixed;inset:0;pointer-events:none}
+  .et{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;background:rgba(18,12,34,.82);border:2px solid #e879f9;border-radius:16px;padding:10px 14px;min-width:120px;text-align:center;box-shadow:0 6px 24px rgba(232,121,249,.35);transition:left .15s,top .15s}
+  .et.on{border-color:#7cf0b4;box-shadow:0 6px 24px rgba(124,240,180,.45)}
+  .et b{display:block;font-size:1rem}.et span{font-size:.85rem;color:#c4b5fd}
+  #haut{position:fixed;top:0;left:0;right:0;padding:12px 16px;background:linear-gradient(#000c,#0000);font-size:.9rem;display:flex;justify-content:space-between;gap:10px}
+  #liste{position:fixed;inset:60px 12px 12px;overflow:auto;display:none;flex-direction:column;gap:10px}
+  #liste button{font:inherit;font-size:1.05rem;text-align:left;padding:14px;border-radius:14px;border:1px solid #3b2a63;background:#151026;color:#ece8f5}
+  #liste button.on{border-color:#7cf0b4}
+  #holo{position:fixed;inset:0;width:100%;height:100%;display:none;background:#000}
+  #msg{position:fixed;left:16px;right:16px;bottom:18px;text-align:center;font-size:.9rem;color:#a78bfa}
+</style>
+</head>
+<body>
+<video id="v" playsinline muted></video>
+<div id="calque"></div>
+<div id="haut"><span id="titre">📱 Jarvis · réalité augmentée</span><span id="etat">…</span></div>
+<div id="liste"></div>
+<canvas id="holo"></canvas>
+<div id="msg"></div>
+<script>
+/* Jarvis — la maison en réalité augmentée et l'orbe en hologramme (page publique, sans aucune donnée : tout arrive du script Google
+   de Bertrand, protégé par la clé de l'album donnée dans le lien). Rien n'est enregistré, les images de la caméra ne quittent pas le téléphone. */
+var P={};location.hash.slice(1).split('&').forEach(function(x){var k=x.split('=');if(k[0])P[k[0]]=decodeURIComponent(k[1]||'');});
+var URLS=P.u||'',CLE=P.c||'',HOLO=P.holo==='1',ETATS={},JARVIS={},SIMUL=false,vus={};
+function $(i){return document.getElementById(i);}
+function msg(t){$('msg').textContent=t||'';}
+function run(action,args){return fetch(URLS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:action,cle:CLE,args:args||[]})}).then(function(r){return r.json();}).then(function(j){if(!j||j.ok===false)throw new Error((j&&j.erreur)||'Réponse illisible.');return j.r;});}
+function lire(){if(!URLS||!CLE){msg('Cette page n’est pas reliée à Jarvis : scanne le QR code affiché par Jarvis.');return;}
+  run('ar_lire').then(function(r){ETATS=(r&&r.etats)||{};JARVIS=(r&&r.jarvis)||{};SIMUL=!!(r&&r.simulation);var age=r&&r.t?Math.round((Date.now()-r.t)/1000):-1;
+    $('etat').textContent=age<0?'Jarvis ne répond pas encore…':age>40?'Jarvis endormi ?':(SIMUL?'maison d’exemple':'en direct');if(!HOLO&&!('BarcodeDetector' in window))liste();}).catch(function(e){$('etat').textContent='hors ligne';msg(e.message);});}
+function basculer(id){run('ar_commande',[id,'basculer']).then(function(){msg('✓ C’est demandé à Jarvis');setTimeout(lire,1500);}).catch(function(e){msg(e.message);});}
+function texte(e){return (e.s==='on'?'allumé':e.s==='off'?'éteint':e.s==='open'?'ouvert':e.s==='closed'?'fermé':e.s==='playing'?'joue':e.s==='paused'?'en pause':e.s)+(e.v?' · '+e.v:'');}
+function liste(){var L=$('liste');L.style.display='flex';L.innerHTML='';msg('Ce téléphone ne sait pas lire les étiquettes : voici la liste (Android + Chrome pour la réalité augmentée).');
+  Object.keys(ETATS).forEach(function(id){var e=ETATS[id],b=document.createElement('button');b.className=e.s==='on'||e.s==='open'||e.s==='playing'?'on':'';b.textContent=e.n+' — '+texte(e);b.onclick=function(){basculer(id);};L.append(b);});}
+/* ---------- réalité augmentée : la caméra et les étiquettes QR « jarvis:entite » ---------- */
+function ar(){var v=$('v'),det;try{det=new BarcodeDetector({formats:['qr_code']});}catch(e){liste();return;}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280}}}).then(function(s){v.srcObject=s;return v.play();}).then(function(){msg('Vise une étiquette de Jarvis.');boucle();}).catch(function(){liste();});
+  function boucle(){if(v.readyState<2){setTimeout(boucle,200);return;}det.detect(v).then(function(codes){var W=innerWidth,H=innerHeight,vw=v.videoWidth,vh=v.videoHeight,k=Math.max(W/vw,H/vh),ox=(W-vw*k)/2,oy=(H-vh*k)/2,t=Date.now();
+      codes.forEach(function(c){var r=String(c.rawValue||'');if(r.indexOf('jarvis:')!==0)return;var id=r.slice(7),b=c.boundingBox;vus[id]={x:ox+(b.x+b.width/2)*k,y:oy+(b.y+b.height/2)*k,t:t};});dessiner();setTimeout(boucle,180);}).catch(function(){setTimeout(boucle,500);});}}
+function dessiner(){var C=$('calque'),t=Date.now();Object.keys(vus).forEach(function(id){var p=vus[id],e=document.getElementById('et-'+id.replace('.','-'));
+    if(t-p.t>1200){if(e)e.remove();return;}var d=ETATS[id]||{n:id,s:'?',v:''};if(!e){e=document.createElement('div');e.id='et-'+id.replace('.','-');e.className='et';e.onclick=function(){basculer(id);};C.append(e);}
+    e.className='et'+(d.s==='on'||d.s==='open'||d.s==='playing'?' on':'');e.innerHTML='';var b=document.createElement('b');b.textContent=d.n;var s=document.createElement('span');s.textContent=texte(d)+' · toucher';e.append(b,s);e.style.left=p.x+'px';e.style.top=(p.y-60)+'px';});}
+/* ---------- l'orbe en hologramme : 4 copies tournées vers le centre ---------- */
+function holo(){$('haut').style.display='none';msg('');var cv=$('holo');cv.style.display='block';var x=cv.getContext('2d'),N=900,pts=[],ecart=.12,t0=performance.now();
+  for(var i=0;i<N;i++){var y=1-(i/(N-1))*2,r=Math.sqrt(1-y*y),th=i*2.399963;pts.push([Math.cos(th)*r,y,Math.sin(th)*r]);}
+  var off=document.createElement('canvas');off.width=off.height=360;var o=off.getContext('2d');
+  cv.addEventListener('click',function(){ecart=ecart>=.3?.04:ecart+.04;try{document.documentElement.requestFullscreen();}catch(e){}});
+  function tour(){var t=(performance.now()-t0)/1000,W=cv.width=innerWidth*devicePixelRatio,H=cv.height=innerHeight*devicePixelRatio,parle=!!JARVIS.parle,ecoute=JARVIS.etat==='listen';
+    var amp=parle?.06+.06*Math.abs(Math.sin(t*9)):ecoute?.06+(JARVIS.niveau||0)*.3:.02,col=ecoute?'124,240,180':'232,121,249',a=t*.5;
+    o.fillStyle='#000';o.fillRect(0,0,360,360);for(var i=0;i<N;i++){var p=pts[i],k=1+amp*Math.sin(t*3+p[1]*6+p[0]*4),X=p[0]*Math.cos(a)-p[2]*Math.sin(a),Z=p[0]*Math.sin(a)+p[2]*Math.cos(a),Y=p[1];
+      var s=2.6/(3.2-Z*k),px=180+X*k*150*s/1.3,py=180+Y*k*150*s/1.3;o.fillStyle='rgba('+col+','+(.35+.45*(Z+1)/2)+')';o.fillRect(px,py,2.6,2.6);}
+    x.fillStyle='#000';x.fillRect(0,0,W,H);var c=Math.min(W,H),tl=c*.3,ec=c*ecart,cx=W/2,cy=H/2;
+    [[0,-1,Math.PI],[0,1,0],[-1,0,Math.PI/2],[1,0,-Math.PI/2]].forEach(function(q){x.save();x.translate(cx+q[0]*(ec+tl/2),cy+q[1]*(ec+tl/2));x.rotate(q[2]);x.drawImage(off,-tl/2,-tl/2,tl,tl);x.restore();});
+    requestAnimationFrame(tour);}tour();}
+lire();setInterval(lire,HOLO?1000:2000);
+if(HOLO)holo();else ar();
+</script>
+</body>
+</html>
